@@ -1,0 +1,378 @@
+openapi: 3.0.3
+info:
+  title: Flight Booking API
+  version: 1.0.0
+  description: REST API for flight search and booking management.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Health check
+      responses:
+        '200':
+          description: Healthy service
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /flights:
+    get:
+      operationId: searchFlights
+      summary: Search flights
+      parameters:
+        - name: origin
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 3
+        - name: destination
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 3
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Matching scheduled flights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlightListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /flights/{id}:
+    get:
+      operationId: getFlightById
+      summary: Get flight by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Flight details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Flight'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+  /bookings:
+    post:
+      operationId: createBooking
+      summary: Create a booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingCreateRequest'
+      responses:
+        '201':
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+    get:
+      operationId: listBookings
+      summary: List bookings by user
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: User bookings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /bookings/{id}:
+    get:
+      operationId: getBookingById
+      summary: Get booking by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /bookings/{id}/cancel:
+    post:
+      operationId: cancelBooking
+      summary: Cancel booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Cancelled booking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+
+    FlightStatus:
+      type: string
+      enum:
+        - SCHEDULED
+        - DEPARTED
+        - CANCELLED
+        - COMPLETED
+
+    BookingStatus:
+      type: string
+      enum:
+        - CONFIRMED
+        - CANCELLED
+
+    Flight:
+      type: object
+      required:
+        - id
+        - flight_number
+        - airline_code
+        - airline_name
+        - origin
+        - destination
+        - departure_time
+        - arrival_time
+        - total_seats
+        - available_seats
+        - price_kopecks
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        flight_number:
+          type: string
+        airline_code:
+          type: string
+        airline_name:
+          type: string
+        origin:
+          type: string
+          minLength: 3
+          maxLength: 3
+        destination:
+          type: string
+          minLength: 3
+          maxLength: 3
+        departure_time:
+          type: string
+          format: date-time
+        arrival_time:
+          type: string
+          format: date-time
+        total_seats:
+          type: integer
+          minimum: 1
+        available_seats:
+          type: integer
+          minimum: 0
+        price_kopecks:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/FlightStatus'
+
+    FlightListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flight'
+
+    BookingCreateRequest:
+      type: object
+      required:
+        - user_id
+        - flight_id
+        - passenger_name
+        - passenger_email
+        - seat_count
+      properties:
+        user_id:
+          type: string
+          minLength: 1
+        flight_id:
+          type: string
+          format: uuid
+        passenger_name:
+          type: string
+          minLength: 1
+        passenger_email:
+          type: string
+          format: email
+        seat_count:
+          type: integer
+          minimum: 1
+
+    Booking:
+      type: object
+      required:
+        - id
+        - user_id
+        - flight_id
+        - passenger_name
+        - passenger_email
+        - seat_count
+        - total_price_kopecks
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        flight_id:
+          type: string
+          format: uuid
+        passenger_name:
+          type: string
+        passenger_email:
+          type: string
+          format: email
+        seat_count:
+          type: integer
+          minimum: 1
+        total_price_kopecks:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/BookingStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BookingListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Business conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UpstreamUnavailable:
+      description: Upstream service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

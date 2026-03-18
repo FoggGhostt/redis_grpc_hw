@@ -1,0 +1,7 @@
+.git
+.idea
+.vscode
+
+server
+bin
+dist

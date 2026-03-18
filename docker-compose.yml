@@ -1,0 +1,109 @@
+services:
+  flight-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: flights
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flights"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  booking-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bookings
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bookings"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  flight-flyway:
+    image: flyway/flyway:10-alpine
+    command:
+      - -url=jdbc:postgresql://flight-db:5432/flights
+      - -user=postgres
+      - -password=postgres
+      - -connectRetries=30
+      - -locations=filesystem:/flyway/sql
+      - migrate
+    volumes:
+      - ./flight-service/migrations:/flyway/sql
+    depends_on:
+      flight-db:
+        condition: service_healthy
+
+  booking-flyway:
+    image: flyway/flyway:10-alpine
+    command:
+      - -url=jdbc:postgresql://booking-db:5432/bookings
+      - -user=postgres
+      - -password=postgres
+      - -connectRetries=30
+      - -locations=filesystem:/flyway/sql
+      - migrate
+    volumes:
+      - ./booking-service/migrations:/flyway/sql
+    depends_on:
+      booking-db:
+        condition: service_healthy
+
+  flight-service:
+    build:
+      context: .
+      dockerfile: ./flight-service/Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@flight-db:5432/flights?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      GRPC_ADDR: :50051
+      API_KEY: secret-key
+    ports:
+      - "50051:50051"
+    depends_on:
+      flight-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      flight-flyway:
+        condition: service_completed_successfully
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: ./booking-service/Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@booking-db:5432/bookings?sslmode=disable
+      HTTP_ADDR: :8080
+      FLIGHT_SERVICE_ADDR: flight-service:50051
+      API_KEY: secret-key
+      RETRY_MAX_ATTEMPTS: "3"
+      RETRY_INITIAL_BACKOFF_MS: "100"
+      GRPC_REQUEST_TIMEOUT_MS: "1500"
+    ports:
+      - "8081:8080"
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      booking-flyway:
+        condition: service_completed_successfully
+      flight-service:
+        condition: service_started
