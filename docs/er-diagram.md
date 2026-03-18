@@ -2,7 +2,9 @@
 
 ```mermaid
 erDiagram
-    FLIGHTS ||--o| SEAT_RESERVATIONS : has
+    FLIGHTS ||--o{ SEAT_RESERVATIONS : has
+    FLIGHTS ||--o{ BOOKINGS : referenced_by
+    BOOKINGS ||--|| SEAT_RESERVATIONS : maps_to
 
     FLIGHTS {
         uuid id PK
