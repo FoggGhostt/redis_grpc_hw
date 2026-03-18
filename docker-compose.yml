@@ -99,7 +99,7 @@ services:
       RETRY_INITIAL_BACKOFF_MS: "100"
       GRPC_REQUEST_TIMEOUT_MS: "1500"
     ports:
-      - "8081:8080"
+      - "8080:8080"
     depends_on:
       booking-db:
         condition: service_healthy
